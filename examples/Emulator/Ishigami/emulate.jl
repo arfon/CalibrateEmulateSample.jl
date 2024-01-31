@@ -9,6 +9,7 @@ using LinearAlgebra
 using CalibrateEmulateSample.EnsembleKalmanProcesses
 using CalibrateEmulateSample.Emulators
 using CalibrateEmulateSample.DataContainers
+using CalibrateEmulateSample.EnsembleKalmanProcesses.Localizers
 
 using CairoMakie, ColorSchemes #for plots
 seed = 2589456
@@ -81,9 +82,8 @@ function main()
     case = cases[3]
     decorrelate = true
     nugget = Float64(1e-12)
-
     overrides =
-        Dict("verbose" => true, "scheduler" => DataMisfitController(terminate_at = 1e4), "n_features_opt" => 200)
+        Dict("scheduler" => DataMisfitController(terminate_at = 1e4), "n_features_opt" => 150, "n_ensemble"=>30, "n_iteration" => 20, "accelerator" => NesterovAccelerator())
     if case == "Prior"
         # don't do anything
         overrides["n_iteration"] = 0
@@ -92,7 +92,7 @@ function main()
 
     y_preds = []
     result_preds = []
-
+    opt_diagnostics = []
     for rep_idx in 1:n_repeats
 
         # Build ML tools
@@ -118,6 +118,11 @@ function main()
         emulator = Emulator(mlt, iopairs; obs_noise_cov = Γ * I, decorrelate = decorrelate)
         optimize_hyperparameters!(emulator)
 
+        # get EKP errors - just stored in "optimizer" box for now
+        if case == "RF-scalar"
+            diag_tmp = reduce(hcat,get_optimizer(mlt)) # (n_iteration, dim_output=1) convergence for each scalar mode as cols
+            push!(opt_diagnostics, diag_tmp)
+        end
         # predict on all Sobol points with emulator (example)    
         y_pred, y_var = predict(emulator, samples', transform_to_real = true)
 
@@ -186,6 +191,18 @@ function main()
     save(joinpath(output_directory, "ishigami_slices_$(case).pdf"), f2, px_per_unit = 3)
 
 
+if length(opt_diagnostics) > 0
+  
+    err_cols = reduce(hcat, opt_diagnostics) #error for each repeat as columns?
+    print(err_cols)
+    # print all repeats
+    f3 = Figure(resolution = (1.618 * 300, 300), markersize = 4)
+    ax_conv = Axis(f3[1, 1], xlabel = "Iteration (0 = prior)", ylabel = "Error")
+    series!(ax_conv, err_cols', solid_color = :blue)
+    save(joinpath(output_directory, "ishigami_eki-conv_$(case).png"), f3, px_per_unit = 3)
+    save(joinpath(output_directory, "ishigami_eki-conv_$(case).pdf"), f3, px_per_unit = 3)
+
+end
 end
 
 

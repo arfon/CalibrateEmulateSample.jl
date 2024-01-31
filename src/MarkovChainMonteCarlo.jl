@@ -169,9 +169,11 @@ function EmulatorPosteriorModel(
                 Emulators.predict(em, reshape(θ, :, 1), transform_to_real = false, vector_rf_unstandardize = false)
             #TODO vector_rf will always unstandardize, but other methods will not, so we require this additional flag.
 
-            if isa(g_cov[1], Real)
+        if isa(g_cov[1], Real)
+        println(logpdf(MvNormal(obs_sample, g_cov[1] * I), vec(g)) + logpdf(prior, θ))
                 return logpdf(MvNormal(obs_sample, g_cov[1] * I), vec(g)) + logpdf(prior, θ)
-            else
+        else
+                println(logpdf(MvNormal(obs_sample, g_cov[1] * I), vec(g)) + logpdf(prior, θ))
                 return logpdf(MvNormal(obs_sample, g_cov[1]), vec(g)) + logpdf(prior, θ)
             end
 
@@ -298,7 +300,7 @@ function AbstractMCMC.bundle_samples(
 )
     # Turn all the transitions into a vector-of-vectors.
     vals = [vcat(t.params, t.log_density, t.accepted) for t in ts]
-
+    println(param_names)
     # Check if we received any parameter names.
     if ismissing(param_names)
         param_names = [Symbol(:param_, i) for i in 1:length(keys(ts[1].params))]

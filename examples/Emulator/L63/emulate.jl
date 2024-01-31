@@ -23,7 +23,7 @@ function main()
     end
 
     # rng
-    rng = MersenneTwister(1232434)
+    rng = MersenneTwister(1232435)
 
     n_repeats = 20 # repeat exp with same data.
     println("run experiment $n_repeats times")
@@ -92,20 +92,22 @@ function main()
     # Emulate
     cases = ["GP", "RF-scalar", "RF-scalar-diagin", "RF-svd-nonsep", "RF-nosvd-nonsep", "RF-nosvd-sep"]
 
-    case = cases[1]
+    case = cases[5]
 
     nugget = Float64(1e-12)
     u_test = []
     u_hist = []
     train_err = []
+    opt_diagnostics = []
+
     for rep_idx in 1:n_repeats
 
         rf_optimizer_overrides = Dict(
             "scheduler" => DataMisfitController(terminate_at = 1e4),
-            "cov_sample_multiplier" => 0.5,
-            "n_features_opt" => 400,
-            "n_iteration" => 30,
-            "accelerator" => ConstantStepNesterovAccelerator(),
+            "cov_sample_multiplier" => 1.0,
+            "n_features_opt" => 200,
+            "n_iteration" => 10, #30
+            "accelerator" => NesterovAccelerator(),
         )
 
         # Build ML tools
@@ -170,7 +172,12 @@ function main()
         emulator = Emulator(mlt, iopairs; obs_noise_cov = Γy, decorrelate = decorrelate)
         optimize_hyperparameters!(emulator)
 
+        # diagnostics
+        if case == "RF-nosvd-nonsep"
+            push!(opt_diagnostics, get_optimizer(mlt)[1]) #length-1 vec of vec  -> vec
+        end
 
+        
         # Predict with emulator
         u_test_tmp = zeros(3, length(xspan_test))
         u_test_tmp[:, 1] = sol_test.u[1]
@@ -252,7 +259,21 @@ function main()
     JLD2.save(joinpath(output_directory, case * "_l63_histdata.jld2"), "solhist", solhist, "uhist", u_hist)
     JLD2.save(joinpath(output_directory, case * "_l63_testdata.jld2"), "solplot", solplot, "uplot", u_test)
 
-    # compare  marginal histograms to truth - rough measure of fit
+# plot eki convergence plot
+if length(opt_diagnostics) > 0
+  println(opt_diagnostics)
+    err_cols = reduce(hcat, opt_diagnostics) #error for each repeat as columns?
+    print(size(err_cols))
+    # print all repeats
+    f5 = Figure(resolution = (1.618 * 300, 300), markersize = 4)
+    ax_conv = Axis(f5[1, 1], xlabel = "Iteration (0 = prior)", ylabel = "Error")
+    series!(ax_conv, err_cols', solid_color = :blue)
+    save(joinpath(output_directory, "l63_eki-conv_$(case).png"), f5, px_per_unit = 3)
+    save(joinpath(output_directory, "l63_eki-conv_$(case).pdf"), f5, px_per_unit = 3)
+
+end
+
+# compare  marginal histograms to truth - rough measure of fit
     sol_cdf = sort(solhist, dims = 2)
 
     u_cdf = []
@@ -277,8 +298,6 @@ function main()
     lines!(axx, sol_cdf[1, :], unif_samples, color = (:orange, 1.0), linewidth = 4)
     lines!(axy, sol_cdf[2, :], unif_samples, color = (:orange, 1.0), linewidth = 4)
     lines!(axz, sol_cdf[3, :], unif_samples, color = (:orange, 1.0), linewidth = 4)
-
-
 
     # save
     save(joinpath(output_directory, case * "_l63_cdfs.png"), f4, px_per_unit = 3)
