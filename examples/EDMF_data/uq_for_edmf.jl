@@ -282,7 +282,7 @@ if length(opt_diagnostics) > 0
     print(size(err_cols))
     # print all repeats
     f5 = Figure(resolution = (1.618 * 300, 300), markersize = 4)
-    ax_conv = Axis(f5[1, 1], xlabel = "Iteration (0 = prior)", ylabel = "Error")
+    ax_conv = Axis(f5[1, 1], xlabel = "Iteration", ylabel = "Error")
     lines!(ax_conv, collect(1:size(err_cols,1))[:], err_cols[:], solid_color = :blue)
     save(joinpath(figure_save_directory, "eki-conv_$(case).png"), f5, px_per_unit = 3)
     save(joinpath(figure_save_directory, "eki-conv_$(case).pdf"), f5, px_per_unit = 3)
