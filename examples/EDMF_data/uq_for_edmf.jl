@@ -6,6 +6,7 @@ using Distributions  # probability distributions and associated functions
 using LinearAlgebra
 ENV["GKSwstype"] = "100"
 using Plots
+using CairoMakie
 using Random
 using JLD2
 using NCDatasets
@@ -28,10 +29,10 @@ Random.seed!(rng_seed)
 function main()
 
     # 2-parameter calibration exp
-    exp_name = "ent-det-calibration"
+    #exp_name = "ent-det-calibration"
 
     # 5-parameter calibration exp
-    #exp_name = "ent-det-tked-tkee-stab-calibration"
+    exp_name = "ent-det-tked-tkee-stab-calibration"
 
 
     # Output figure save directory
@@ -120,6 +121,7 @@ function main()
             for plot_i in 1:size(outputs, 1)
                 p = scatter(inputs_constrained[1, :], inputs_constrained[2, :], zcolor = outputs[plot_i, :])
                 savefig(p, joinpath(figure_save_directory, "output_" * string(plot_i) * ".png"))
+                savefig(p, joinpath(figure_save_directory, "output_" * string(plot_i) * ".pdf"))
             end
             println("finished plotting ensembles.")
         end
@@ -201,21 +203,26 @@ function main()
     cases = [
         "GP", # diagonalize, train scalar GP, assume diag inputs
         "RF-vector-svd-nonsep",
+        "RF-vector-nosvd-nonsep",  # don't perform decorrelation  
     ]
-    case = cases[2]
+    case = cases[3]
 
     overrides = Dict(
         "verbose" => true,
-        "train_fraction" => 0.95,
-        "scheduler" => DataMisfitController(terminate_at = 100),
-        "cov_sample_multiplier" => 0.5,
-        "n_iteration" => 5,
+        "train_fraction" => 0.9, #95
+        "scheduler" => DataMisfitController(terminate_at = 1e5),
+        "cov_sample_multiplier" => 0.4,
+        "n_features_opt" => 200,
+        "n_iteration" => 20,
+        #    "n_ensemble" => 20,
+#           "localization" => SEC(1.0, 0.01), # localization / sample error correction for small ensembles
     )
-    nugget = 0.01
+    nugget = 1e-10#1e-12#0.01
     rng_seed = 99330
     rng = Random.MersenneTwister(rng_seed)
     input_dim = size(get_inputs(input_output_pairs), 1)
     output_dim = size(get_outputs(input_output_pairs), 1)
+    decorrelate=true
     if case == "GP"
 
         gppackage = Emulators.SKLJL()
@@ -238,18 +245,50 @@ function main()
             kernel_structure = kernel_structure,
             optimizer_options = overrides,
         )
+    elseif case ∈ ["RF-vector-nosvd-nonsep"]
+        kernel_structure = NonseparableKernel(LowRankFactor(3, nugget))
+        n_features = 500
+        
+        mlt = VectorRandomFeatureInterface(
+            n_features,
+            input_dim,
+            output_dim,
+            rng = rng,
+            kernel_structure = kernel_structure,
+            optimizer_options = overrides,
+        )
+        decorrelate=false
     end
 
     # Fit an emulator to the data
     normalized = true
 
-    emulator = Emulator(mlt, input_output_pairs; obs_noise_cov = truth_cov, normalize_inputs = normalized)
+    emulator = Emulator(mlt, input_output_pairs; obs_noise_cov = truth_cov, normalize_inputs = normalized, decorrelate = decorrelate)
 
     # Optimize the GP hyperparameters for better fit
     optimize_hyperparameters!(emulator)
+    opt_diagnostics = []
+    if case  ∈ ["RF-vector-nosvd-nonsep", "RF-vector-svd-nonsep"]
+        push!(opt_diagnostics, get_optimizer(mlt)[1]) #length-1 vec of vec -> vec
+    end
 
     emulator_filepath = joinpath(data_save_directory, "emulator.jld2")
     save(emulator_filepath, "emulator", emulator)
+
+# plot eki convergence plot
+if length(opt_diagnostics) > 0
+    println(opt_diagnostics)
+    err_cols = reduce(hcat, opt_diagnostics) #error for each repeat as columns?
+    print(size(err_cols))
+    # print all repeats
+    f5 = Figure(resolution = (1.618 * 300, 300), markersize = 4)
+    ax_conv = Axis(f5[1, 1], xlabel = "Iteration (0 = prior)", ylabel = "Error")
+    lines!(ax_conv, collect(1:size(err_cols,1))[:], err_cols[:], solid_color = :blue)
+    save(joinpath(figure_save_directory, "eki-conv_$(case).png"), f5, px_per_unit = 3)
+    save(joinpath(figure_save_directory, "eki-conv_$(case).pdf"), f5, px_per_unit = 3)
+
+end
+
 
     println("Finished Emulation stage")
     println(" ")
