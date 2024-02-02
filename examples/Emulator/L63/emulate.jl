@@ -269,7 +269,7 @@ if length(opt_diagnostics) > 0
 
     # print all repeats
     f5 = Figure(resolution = (1.618 * 300, 300), markersize = 4)
-    ax_conv = Axis(f5[1, 1], xlabel = "Iteration", ylabel = "max-normalized-error")
+    ax_conv = Axis(f5[1, 1], xlabel = "Iteration", ylabel = "max-normalized-error", yscale=log10)
     if n_repeats == 1
         lines!(ax_conv, collect(1:size(err_cols,1))[:], err_cols[:], solid_color = :blue) # If just one repeat
     else
