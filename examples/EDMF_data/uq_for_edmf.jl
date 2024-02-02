@@ -284,9 +284,7 @@ function main()
 
     # plot eki convergence plot
     if length(opt_diagnostics) > 0
-        println(opt_diagnostics)
         err_cols = reduce(hcat, opt_diagnostics) #error for each repeat as columns?
-        print(size(err_cols))
 
         #save data
         error_filepath = joinpath(data_save_directory, "eki_conv_error.jld2")

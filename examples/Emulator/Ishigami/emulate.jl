@@ -192,13 +192,25 @@ function main()
 
 
 if length(opt_diagnostics) > 0
-  
     err_cols = reduce(hcat, opt_diagnostics) #error for each repeat as columns?
-    print(err_cols)
+
+    #save
+    error_filepath = joinpath(output_directory, "eki_conv_error.jld2")
+    save(error_filepath, "error", err_cols)
+
     # print all repeats
     f3 = Figure(resolution = (1.618 * 300, 300), markersize = 4)
-    ax_conv = Axis(f3[1, 1], xlabel = "Iteration (0 = prior)", ylabel = "Error")
-    series!(ax_conv, err_cols', solid_color = :blue)
+    ax_conv = Axis(f3[1, 1], xlabel = "Iteration", ylabel = "Error")
+    
+    if n_repeats == 1
+        lines!(ax_conv, collect(1:size(err_cols,1))[:], err_cols[:], solid_color = :blue) # If just one repeat
+    else
+        for idx = 1:size(err_cols,1)
+            err_normalized = (err_cols' ./ err_cols[1,:])' # divide each series by the max, so all errors start at 1
+            series!(ax_conv, err_normalized', solid_color = :blue)
+        end
+    end
+
     save(joinpath(output_directory, "ishigami_eki-conv_$(case).png"), f3, px_per_unit = 3)
     save(joinpath(output_directory, "ishigami_eki-conv_$(case).pdf"), f3, px_per_unit = 3)
 
