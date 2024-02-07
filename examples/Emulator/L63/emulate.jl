@@ -177,7 +177,7 @@ function main()
             push!(opt_diagnostics, get_optimizer(mlt)[1]) #length-1 vec of vec  -> vec
         end
 
-        
+
         # Predict with emulator
         u_test_tmp = zeros(3, length(xspan_test))
         u_test_tmp[:, 1] = sol_test.u[1]
@@ -259,31 +259,31 @@ function main()
     JLD2.save(joinpath(output_directory, case * "_l63_histdata.jld2"), "solhist", solhist, "uhist", u_hist)
     JLD2.save(joinpath(output_directory, case * "_l63_testdata.jld2"), "solplot", solplot, "uplot", u_test)
 
-# plot eki convergence plot
-if length(opt_diagnostics) > 0
-    err_cols = reduce(hcat, opt_diagnostics) #error for each repeat as columns?
-    
-    #save
-    error_filepath = joinpath(output_directory, "eki_conv_error.jld2")
-    save(error_filepath, "error", err_cols)
+    # plot eki convergence plot
+    if length(opt_diagnostics) > 0
+        err_cols = reduce(hcat, opt_diagnostics) #error for each repeat as columns?
 
-    # print all repeats
-    f5 = Figure(resolution = (1.618 * 300, 300), markersize = 4)
-    ax_conv = Axis(f5[1, 1], xlabel = "Iteration", ylabel = "max-normalized error", yscale=log10)
-    if n_repeats == 1
-        lines!(ax_conv, collect(1:size(err_cols,1))[:], err_cols[:], solid_color = :blue) # If just one repeat
-    else
-        for idx = 1:size(err_cols,1)
-            err_normalized = (err_cols' ./ err_cols[1,:])' # divide each series by the max, so all errors start at 1
-            series!(ax_conv, err_normalized', solid_color = :blue)
+        #save
+        error_filepath = joinpath(output_directory, "eki_conv_error.jld2")
+        save(error_filepath, "error", err_cols)
+
+        # print all repeats
+        f5 = Figure(resolution = (1.618 * 300, 300), markersize = 4)
+        ax_conv = Axis(f5[1, 1], xlabel = "Iteration", ylabel = "max-normalized error", yscale = log10)
+        if n_repeats == 1
+            lines!(ax_conv, collect(1:size(err_cols, 1))[:], err_cols[:], solid_color = :blue) # If just one repeat
+        else
+            for idx in 1:size(err_cols, 1)
+                err_normalized = (err_cols' ./ err_cols[1, :])' # divide each series by the max, so all errors start at 1
+                series!(ax_conv, err_normalized', solid_color = :blue)
+            end
         end
+        save(joinpath(output_directory, "l63_eki-conv_$(case).png"), f5, px_per_unit = 3)
+        save(joinpath(output_directory, "l63_eki-conv_$(case).pdf"), f5, px_per_unit = 3)
+
     end
-    save(joinpath(output_directory, "l63_eki-conv_$(case).png"), f5, px_per_unit = 3)
-    save(joinpath(output_directory, "l63_eki-conv_$(case).pdf"), f5, px_per_unit = 3)
 
-end
-
-# compare  marginal histograms to truth - rough measure of fit
+    # compare  marginal histograms to truth - rough measure of fit
     sol_cdf = sort(solhist, dims = 2)
 
     u_cdf = []

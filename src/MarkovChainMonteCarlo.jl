@@ -169,9 +169,9 @@ function EmulatorPosteriorModel(
                 Emulators.predict(em, reshape(θ, :, 1), transform_to_real = false, vector_rf_unstandardize = false)
             #TODO vector_rf will always unstandardize, but other methods will not, so we require this additional flag.
 
-        if isa(g_cov[1], Real)
+            if isa(g_cov[1], Real)
                 return logpdf(MvNormal(obs_sample, g_cov[1] * I), vec(g)) + logpdf(prior, θ)
-        else
+            else
                 return logpdf(MvNormal(obs_sample, g_cov[1]), vec(g)) + logpdf(prior, θ)
             end
 

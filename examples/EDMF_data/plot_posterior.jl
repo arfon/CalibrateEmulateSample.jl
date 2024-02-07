@@ -18,7 +18,7 @@ using CalibrateEmulateSample.ParameterDistributions
 
 # 5-parameter calibration exp
 exp_name = "ent-det-tked-tkee-stab-calibration"
-date_of_run = Date(2024,2,2)
+date_of_run = Date(2024, 2, 2)
 
 # Output figure read/write directory
 figure_save_directory = joinpath(@__DIR__, "output", exp_name, string(date_of_run))

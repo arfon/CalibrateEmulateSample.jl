@@ -82,8 +82,13 @@ function main()
     case = cases[3]
     decorrelate = true
     nugget = Float64(1e-12)
-    overrides =
-        Dict("scheduler" => DataMisfitController(terminate_at = 1e4), "n_features_opt" => 150, "n_ensemble"=>30, "n_iteration" => 20, "accelerator" => NesterovAccelerator())
+    overrides = Dict(
+        "scheduler" => DataMisfitController(terminate_at = 1e4),
+        "n_features_opt" => 150,
+        "n_ensemble" => 30,
+        "n_iteration" => 20,
+        "accelerator" => NesterovAccelerator(),
+    )
     if case == "Prior"
         # don't do anything
         overrides["n_iteration"] = 0
@@ -120,7 +125,7 @@ function main()
 
         # get EKP errors - just stored in "optimizer" box for now
         if case == "RF-scalar"
-            diag_tmp = reduce(hcat,get_optimizer(mlt)) # (n_iteration, dim_output=1) convergence for each scalar mode as cols
+            diag_tmp = reduce(hcat, get_optimizer(mlt)) # (n_iteration, dim_output=1) convergence for each scalar mode as cols
             push!(opt_diagnostics, diag_tmp)
         end
         # predict on all Sobol points with emulator (example)    
@@ -191,30 +196,30 @@ function main()
     save(joinpath(output_directory, "ishigami_slices_$(case).pdf"), f2, px_per_unit = 3)
 
 
-if length(opt_diagnostics) > 0
-    err_cols = reduce(hcat, opt_diagnostics) #error for each repeat as columns?
+    if length(opt_diagnostics) > 0
+        err_cols = reduce(hcat, opt_diagnostics) #error for each repeat as columns?
 
-    #save
-    error_filepath = joinpath(output_directory, "eki_conv_error.jld2")
-    save(error_filepath, "error", err_cols)
+        #save
+        error_filepath = joinpath(output_directory, "eki_conv_error.jld2")
+        save(error_filepath, "error", err_cols)
 
-    # print all repeats
-    f3 = Figure(resolution = (1.618 * 300, 300), markersize = 4)
-    ax_conv = Axis(f3[1, 1], xlabel = "Iteration", ylabel = "Error")
-    
-    if n_repeats == 1
-        lines!(ax_conv, collect(1:size(err_cols,1))[:], err_cols[:], solid_color = :blue) # If just one repeat
-    else
-        for idx = 1:size(err_cols,1)
-            err_normalized = (err_cols' ./ err_cols[1,:])' # divide each series by the max, so all errors start at 1
-            series!(ax_conv, err_normalized', solid_color = :blue)
+        # print all repeats
+        f3 = Figure(resolution = (1.618 * 300, 300), markersize = 4)
+        ax_conv = Axis(f3[1, 1], xlabel = "Iteration", ylabel = "Error")
+
+        if n_repeats == 1
+            lines!(ax_conv, collect(1:size(err_cols, 1))[:], err_cols[:], solid_color = :blue) # If just one repeat
+        else
+            for idx in 1:size(err_cols, 1)
+                err_normalized = (err_cols' ./ err_cols[1, :])' # divide each series by the max, so all errors start at 1
+                series!(ax_conv, err_normalized', solid_color = :blue)
+            end
         end
+
+        save(joinpath(output_directory, "ishigami_eki-conv_$(case).png"), f3, px_per_unit = 3)
+        save(joinpath(output_directory, "ishigami_eki-conv_$(case).pdf"), f3, px_per_unit = 3)
+
     end
-
-    save(joinpath(output_directory, "ishigami_eki-conv_$(case).png"), f3, px_per_unit = 3)
-    save(joinpath(output_directory, "ishigami_eki-conv_$(case).pdf"), f3, px_per_unit = 3)
-
-end
 end
 
 

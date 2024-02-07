@@ -579,7 +579,7 @@ function build_models!(
         err[i] = get_error(ekiobj)[end] #mean((params_true - mean(params_i,dims=2)).^2)
 
     end
-    push!(optimizer,err)
+    push!(optimizer, err)
 
     # [5.] extract optimal hyperparameters
     hp_optimal = get_ϕ_mean_final(prior, ekiobj)[:]

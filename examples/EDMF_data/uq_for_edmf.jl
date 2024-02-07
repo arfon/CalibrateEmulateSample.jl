@@ -210,7 +210,7 @@ function main()
 
     opt_diagnostics = []
     emulators = []
-    for rep_idx = 1:n_repeats
+    for rep_idx in 1:n_repeats
 
         overrides = Dict(
             "verbose" => true,
@@ -227,7 +227,7 @@ function main()
         rng = Random.MersenneTwister(rng_seed)
         input_dim = size(get_inputs(input_output_pairs), 1)
         output_dim = size(get_outputs(input_output_pairs), 1)
-        decorrelate=true
+        decorrelate = true
         if case == "GP"
 
             gppackage = Emulators.SKLJL()
@@ -262,21 +262,27 @@ function main()
                 kernel_structure = kernel_structure,
                 optimizer_options = overrides,
             )
-            decorrelate=false
+            decorrelate = false
         end
 
         # Fit an emulator to the data
         normalized = true
 
-        emulator = Emulator(mlt, input_output_pairs; obs_noise_cov = truth_cov, normalize_inputs = normalized, decorrelate = decorrelate)
+        emulator = Emulator(
+            mlt,
+            input_output_pairs;
+            obs_noise_cov = truth_cov,
+            normalize_inputs = normalized,
+            decorrelate = decorrelate,
+        )
 
         # Optimize the GP hyperparameters for better fit
         optimize_hyperparameters!(emulator)
-        if case  ∈ ["RF-vector-nosvd-nonsep", "RF-vector-svd-nonsep"]
+        if case ∈ ["RF-vector-nosvd-nonsep", "RF-vector-svd-nonsep"]
             push!(opt_diagnostics, get_optimizer(mlt)[1]) #length-1 vec of vec -> vec
         end
 
-        for rep_idx = n_repeats
+        for rep_idx in n_repeats
             push!(emulators, emulator)
         end
     end
@@ -294,10 +300,10 @@ function main()
         f5 = Figure(resolution = (1.618 * 300, 300), markersize = 4)
         ax_conv = Axis(f5[1, 1], xlabel = "Iteration", ylabel = "max-normalized error")
         if n_repeats == 1
-            lines!(ax_conv, collect(1:size(err_cols,1))[:], err_cols[:], solid_color = :blue) # If just one repeat
+            lines!(ax_conv, collect(1:size(err_cols, 1))[:], err_cols[:], solid_color = :blue) # If just one repeat
         else
-            for idx = 1:size(err_cols,1)
-                err_normalized = (err_cols' ./ err_cols[1,:])' # divide each series by the max, so all errors start at 1
+            for idx in 1:size(err_cols, 1)
+                err_normalized = (err_cols' ./ err_cols[1, :])' # divide each series by the max, so all errors start at 1
                 series!(ax_conv, err_normalized', solid_color = :blue)
             end
         end
