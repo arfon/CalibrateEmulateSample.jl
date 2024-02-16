@@ -36,12 +36,13 @@ function main()
 
     rng = MersenneTwister(seed)
 
-    n_repeats = 20 # repeat exp with same data.
+    n_repeats = 30 # repeat exp with same data.
     n_dimensions = 10
     # To create the sampling
     n_data_gen = 1000
 
-    data = SobolData(params = OrderedDict([Pair(Symbol("x", i), Uniform(0, 1)) for i in 1:n_dimensions]), N = n_data_gen)
+    data =
+        SobolData(params = OrderedDict([Pair(Symbol("x", i), Uniform(0, 1)) for i in 1:n_dimensions]), N = n_data_gen)
 
     # To perform global analysis,
     # one must generate samples using Sobol sequence (i.e. creates more than N points)
@@ -54,17 +55,15 @@ function main()
     result = analyze(data, y)
 
     # plot the first 3 dimensions
-    f1 = Figure(resolution = (1.618 * 900, 300), markersize = 4)
-    axx = Axis(f1[1, 1], xlabel = "x1", ylabel = "f")
-    axy = Axis(f1[1, 2], xlabel = "x2", ylabel = "f")
-    axz = Axis(f1[1, 3], xlabel = "x3", ylabel = "f")
+    plot_dim = n_dimensions >= 3 ? 3 : n_dimensions
+    f1 = Figure(resolution = (1.618 * plot_dim * 300, 300), markersize = 4)
+    for i in 1:plot_dim
+        ax = Axis(f1[1, i], xlabel = "x" * string(i), ylabel = "f")
+        scatter!(ax, samples[:, i], y[:], color = :orange)
+    end
 
-    scatter!(axx, samples[:, 1], y[:], color = :orange)
-    scatter!(axy, samples[:, 2], y[:], color = :orange)
-    scatter!(axz, samples[:, 3], y[:], color = :orange)
-
-    save(joinpath(output_directory, "GFunction_slices_truth.png"), f1, px_per_unit = 3)
-    save(joinpath(output_directory, "GFunction_slices_truth.pdf"), f1, px_per_unit = 3)
+    save(joinpath(output_directory, "GFunction_slices_truth_$(n_dimensions).png"), f1, px_per_unit = 3)
+    save(joinpath(output_directory, "GFunction_slices_truth_$(n_dimensions).pdf"), f1, px_per_unit = 3)
 
     n_train_pts = 1000
     ind = shuffle!(rng, Vector(1:n_data))[1:n_train_pts]
@@ -111,8 +110,8 @@ function main()
             mlt = GaussianProcess(gppackage; prediction_type = pred_type, noise_learn = false)
 
         elseif case ∈ ["RF-scalar", "Prior"]
-
-            kernel_structure = SeparableKernel(LowRankFactor(9, nugget), OneDimFactor())
+            rank = n_dimensions
+            kernel_structure = SeparableKernel(LowRankFactor(rank, nugget), OneDimFactor())
             n_features = n_dimensions * 200
             mlt = ScalarRandomFeatureInterface(
                 n_features,
@@ -159,6 +158,7 @@ function main()
 
     println("Sampled Emulated Sobol Indices (# obs $n_train_pts, noise var $Γ)")
     println("***************************************************************")
+
     if n_repeats == 1
         println("    firstorder: ", result_preds[1][:firstorder])
         println("    totalorder: ", result_preds[1][:totalorder])
@@ -174,32 +174,45 @@ function main()
         println("(std)  totalorder: ", totalorder_std)
 
         #
-        f3, ax3, plt3 = errorbars(1:n_dimensions, firstorder_mean, 2 * firstorder_std; whiskerwidth = 10, color = :red)
-        scatter!(ax3, result[:firstorder], color = :black, markersize = 8)
-        errorbars!(ax3, 1:n_dimensions, firstorder_mean, 3 * firstorder_std; whiskerwidth = 10, color = :red)
-        errorbars!(ax3, 1:n_dimensions, firstorder_mean, firstorder_std; whiskerwidth = 10, color = :red)
+        f3, ax3, plt3 = errorbars(
+            1:n_dimensions,
+            firstorder_mean,
+            2 * firstorder_std;
+            whiskerwidth = 10,
+            color = :red,
+            label = "V",
+            title = "input dimension: $(n_dimensions)",
+        )
+        scatter!(ax3, result[:firstorder], color = :red, markersize = 8)
+        errorbars!(
+            ax3,
+            1:n_dimensions,
+            totalorder_mean,
+            2 * totalorder_std;
+            whiskerwidth = 10,
+            color = :blue,
+            label = "TV",
+        )
+        scatter!(ax3, result[:totalorder], color = :blue, markersize = 8)
+        axislegend(ax3)
 
-        save(joinpath(output_directory, "GFunction_sens_$(case).png"), f3, px_per_unit = 3)
-        save(joinpath(output_directory, "GFunction_sens_$(case).pdf"), f3, px_per_unit = 3)
+        save(joinpath(output_directory, "GFunction_sens_$(case)_$(n_dimensions).png"), f3, px_per_unit = 3)
+        save(joinpath(output_directory, "GFunction_sens_$(case)_$(n_dimensions).pdf"), f3, px_per_unit = 3)
+
     end
 
 
 
     # plots - first 3 dimensions
 
-    f2 = Figure(resolution = (1.618 * 900, 300), markersize = 4)
-    axx_em = Axis(f2[1, 1], xlabel = "x1", ylabel = "f")
-    axy_em = Axis(f2[1, 2], xlabel = "x2", ylabel = "f")
-    axz_em = Axis(f2[1, 3], xlabel = "x3", ylabel = "f")
-    scatter!(axx_em, samples[:, 1], y_preds[1][:], color = :blue)
-    scatter!(axy_em, samples[:, 2], y_preds[1][:], color = :blue)
-    scatter!(axz_em, samples[:, 3], y_preds[1][:], color = :blue)
-    scatter!(axx_em, samples[ind, 1], y[ind] + noise, color = :red, markersize = 8)
-    scatter!(axy_em, samples[ind, 2], y[ind] + noise, color = :red, markersize = 8)
-    scatter!(axz_em, samples[ind, 3], y[ind] + noise, color = :red, markersize = 8)
-
-    save(joinpath(output_directory, "GFunction_slices_$(case).png"), f2, px_per_unit = 3)
-    save(joinpath(output_directory, "GFunction_slices_$(case).pdf"), f2, px_per_unit = 3)
+    f2 = Figure(resolution = (1.618 * plot_dim * 300, 300), markersize = 4)
+    for i in 1:plot_dim
+        ax2 = Axis(f2[1, i], xlabel = "x" * string(i), ylabel = "f")
+        scatter!(ax2, samples[:, i], y_preds[1][:], color = :blue)
+        scatter!(ax2, samples[ind, i], y[ind] + noise, color = :red, markersize = 8)
+    end
+    save(joinpath(output_directory, "GFunction_slices_$(case)_$(n_dimensions).png"), f2, px_per_unit = 3)
+    save(joinpath(output_directory, "GFunction_slices_$(case)_$(n_dimensions).pdf"), f2, px_per_unit = 3)
 
 
 end
