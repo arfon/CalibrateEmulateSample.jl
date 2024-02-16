@@ -90,7 +90,7 @@ function main()
         "n_features_opt" => 100,
         "n_iteration" => 20,
         "cov_sample_multiplier" => 5.0,
-        "n_ensemble" => 200,
+        "n_ensemble" => 40*n_dimensions,
     )
     if case == "Prior"
         # don't do anything
