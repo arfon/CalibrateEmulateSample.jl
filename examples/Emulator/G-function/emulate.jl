@@ -19,19 +19,19 @@ if !isdir(output_directory)
 end
 
 
-inner_func(x::AV,a::AV) where {AV <: AbstractVector} = prod((abs.(4 * x .- 2) + a) ./ (1 .+ a))
+inner_func(x::AV, a::AV) where {AV <: AbstractVector} = prod((abs.(4 * x .- 2) + a) ./ (1 .+ a))
 
 "G-Function taken from https://www.sfu.ca/~ssurjano/gfunc.html"
 function GFunction(x::AM, a::AV) where {AM <: AbstractMatrix, AV <: AbstractVector}
-    @assert size(x,1) == length(a)
-    return mapslices(y -> inner_func(y,a), x; dims=1) #applys the map to columns
+    @assert size(x, 1) == length(a)
+    return mapslices(y -> inner_func(y, a), x; dims = 1) #applys the map to columns
 end
-    
+
 function GFunction(x::AM) where {AM <: AbstractMatrix}
-    a = [(i-2.0)/2.0 for i = 1:size(x,1)]
-    return GFunction(x,a)
+    a = [(i - 2.0) / 2.0 for i in 1:size(x, 1)]
+    return GFunction(x, a)
 end
-    
+
 function main()
 
     rng = MersenneTwister(seed)
@@ -41,10 +41,7 @@ function main()
     # To create the sampling
     n_data_gen = 1000
 
-    data = SobolData(
-        params = OrderedDict([Pair(Symbol("x",i),Uniform(0,1)) for i = 1:n_dimensions]),
-        N = n_data_gen,
-    )
+    data = SobolData(params = OrderedDict([Pair(Symbol("x", i), Uniform(0, 1)) for i in 1:n_dimensions]), N = n_data_gen)
 
     # To perform global analysis,
     # one must generate samples using Sobol sequence (i.e. creates more than N points)
@@ -88,13 +85,14 @@ function main()
     decorrelate = true
     nugget = Float64(1e-12)
 
-    overrides =
-        Dict("verbose" => true,
-             "scheduler" => DataMisfitController(terminate_at = 1e4),
-             "n_features_opt" => 100,
-             "n_iteration" => 20,
-             "cov_sample_multiplier" => 5.0,
-             "n_ensemble" => 200)
+    overrides = Dict(
+        "verbose" => true,
+        "scheduler" => DataMisfitController(terminate_at = 1e4),
+        "n_features_opt" => 100,
+        "n_iteration" => 20,
+        "cov_sample_multiplier" => 5.0,
+        "n_ensemble" => 200,
+    )
     if case == "Prior"
         # don't do anything
         overrides["n_iteration"] = 0
@@ -115,7 +113,7 @@ function main()
         elseif case ∈ ["RF-scalar", "Prior"]
 
             kernel_structure = SeparableKernel(LowRankFactor(9, nugget), OneDimFactor())
-            n_features = n_dimensions*200
+            n_features = n_dimensions * 200
             mlt = ScalarRandomFeatureInterface(
                 n_features,
                 n_dimensions,
@@ -141,11 +139,11 @@ function main()
 
     # analytic sobol indices taken from
     # https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8989694/pdf/main.pdf
-    a = [(i-2.0)/2.0 for i = 1:n_dimensions]  # a_i < a_j => a_i more sensitive
-    prod_tmp = prod(1 .+ 1 ./ (3 .* (1 .+ a).^2))-1
-    V = [(1/(3*(1+ai)^2)) / prod_tmp for ai in a]
-    prod_tmp2 = [prod(1 .+ 1 ./ (3 .* (1 .+ a[1:end .!== j]).^2)) for j = 1:n_dimensions]
-    TV = [(1/(3*(1+ai)^2))*prod_tmp2[i] / prod_tmp for (i,ai) in enumerate(a)]
+    a = [(i - 2.0) / 2.0 for i in 1:n_dimensions]  # a_i < a_j => a_i more sensitive
+    prod_tmp = prod(1 .+ 1 ./ (3 .* (1 .+ a) .^ 2)) - 1
+    V = [(1 / (3 * (1 + ai)^2)) / prod_tmp for ai in a]
+    prod_tmp2 = [prod(1 .+ 1 ./ (3 .* (1 .+ a[1:end .!== j]) .^ 2)) for j in 1:n_dimensions]
+    TV = [(1 / (3 * (1 + ai)^2)) * prod_tmp2[i] / prod_tmp for (i, ai) in enumerate(a)]
 
     println(" ")
     println("True Sobol Indices")
@@ -176,16 +174,16 @@ function main()
         println("(std)  totalorder: ", totalorder_std)
 
         #
-        f3, ax3, plt3 = errorbars(1:n_dimensions,firstorder_mean, 2*firstorder_std; whiskerwidth=10, color=:red)
-        scatter!(ax3, result[:firstorder], color= :black, markersize=8)
-        errorbars!(ax3, 1:n_dimensions,firstorder_mean, 3*firstorder_std; whiskerwidth=10, color=:red)
-        errorbars!(ax3, 1:n_dimensions,firstorder_mean, firstorder_std; whiskerwidth=10, color=:red)
+        f3, ax3, plt3 = errorbars(1:n_dimensions, firstorder_mean, 2 * firstorder_std; whiskerwidth = 10, color = :red)
+        scatter!(ax3, result[:firstorder], color = :black, markersize = 8)
+        errorbars!(ax3, 1:n_dimensions, firstorder_mean, 3 * firstorder_std; whiskerwidth = 10, color = :red)
+        errorbars!(ax3, 1:n_dimensions, firstorder_mean, firstorder_std; whiskerwidth = 10, color = :red)
 
         save(joinpath(output_directory, "GFunction_sens_$(case).png"), f3, px_per_unit = 3)
         save(joinpath(output_directory, "GFunction_sens_$(case).pdf"), f3, px_per_unit = 3)
     end
 
-    
+
 
     # plots - first 3 dimensions
 
