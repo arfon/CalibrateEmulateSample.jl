@@ -9,6 +9,7 @@ using LinearAlgebra
 using CalibrateEmulateSample.EnsembleKalmanProcesses
 using CalibrateEmulateSample.Emulators
 using CalibrateEmulateSample.DataContainers
+using CalibrateEmulateSample.EnsembleKalmanProcesses.Localizers
 
 using CairoMakie, ColorSchemes #for plots
 seed = 2589456
@@ -36,10 +37,10 @@ function main()
 
     rng = MersenneTwister(seed)
 
-    n_repeats = 30 # repeat exp with same data.
-    n_dimensions = 10
+    n_repeats = 5 # repeat exp with same data.
+    n_dimensions = 20
     # To create the sampling
-    n_data_gen = 1000
+    n_data_gen = 500 
 
     data =
         SobolData(params = OrderedDict([Pair(Symbol("x", i), Uniform(0, 1)) for i in 1:n_dimensions]), N = n_data_gen)
@@ -65,7 +66,7 @@ function main()
     save(joinpath(output_directory, "GFunction_slices_truth_$(n_dimensions).png"), f1, px_per_unit = 3)
     save(joinpath(output_directory, "GFunction_slices_truth_$(n_dimensions).pdf"), f1, px_per_unit = 3)
 
-    n_train_pts = 1000
+    n_train_pts = 2000
     ind = shuffle!(rng, Vector(1:n_data))[1:n_train_pts]
     # now subsample the samples data
     n_tp = length(ind)
@@ -88,9 +89,12 @@ function main()
         "verbose" => true,
         "scheduler" => DataMisfitController(terminate_at = 1e4),
         "n_features_opt" => 100,
-        "n_iteration" => 20,
-        "cov_sample_multiplier" => 5.0,
-        "n_ensemble" => 40*n_dimensions,
+        "train_fraction" => 0.9,
+        "n_iteration" => 24, # (=multiple of recompute_cov_at - 1 is most efficient)
+        "cov_sample_multiplier" => 10.0,
+        "localization" => SECNice(100), # there is no localization for scalar RF
+        "n_ensemble" => 400, #40*n_dimensions,
+        "recompute_cov_at" => 5, #every 5 iterations recompute alg. covariance
     )
     if case == "Prior"
         # don't do anything
@@ -110,9 +114,12 @@ function main()
             mlt = GaussianProcess(gppackage; prediction_type = pred_type, noise_learn = false)
 
         elseif case ∈ ["RF-scalar", "Prior"]
-            rank = n_dimensions
+            rank = n_dimensions #<= 10 ? n_dimensions : 10
             kernel_structure = SeparableKernel(LowRankFactor(rank, nugget), OneDimFactor())
-            n_features = n_dimensions * 200
+            n_features = n_dimensions <= 10 ? n_dimensions * 100 : 1000
+            if (n_features/n_train_pts > 0.9) && (n_features/n_train_pts < 1.1)
+                @warn "The number of features similar to the number of training points, poor performance expected, change one or other of these"
+            end
             mlt = ScalarRandomFeatureInterface(
                 n_features,
                 n_dimensions,
@@ -131,6 +138,9 @@ function main()
 
         # obtain emulated Sobol indices
         result_pred = analyze(data, y_pred')
+        println("First order: ", result_pred[:firstorder])
+        println("Total order: ", result_pred[:totalorder])
+        
         push!(y_preds, y_pred)
         push!(result_preds, result_pred)
 
@@ -180,10 +190,11 @@ function main()
             2 * firstorder_std;
             whiskerwidth = 10,
             color = :red,
-            label = "V",
+            label = "V-emulate",
             title = "input dimension: $(n_dimensions)",
         )
-        scatter!(ax3, result[:firstorder], color = :red, markersize = 8)
+        scatter!(ax3, result[:firstorder], color = :red, markersize = 8, label="V-approx")
+        scatter!(ax3, V, color = :red, markersize = 12, marker = :xcross, label="V-true")
         errorbars!(
             ax3,
             1:n_dimensions,
@@ -191,9 +202,10 @@ function main()
             2 * totalorder_std;
             whiskerwidth = 10,
             color = :blue,
-            label = "TV",
+            label = "TV-emulate",
         )
-        scatter!(ax3, result[:totalorder], color = :blue, markersize = 8)
+        scatter!(ax3, result[:totalorder], color = :blue, markersize = 8,label="TV-approx") 
+        scatter!(ax3, TV, color = :blue, markersize = 12, marker = :xcross,  label="TV-true")
         axislegend(ax3)
 
         save(joinpath(output_directory, "GFunction_sens_$(case)_$(n_dimensions).png"), f3, px_per_unit = 3)
