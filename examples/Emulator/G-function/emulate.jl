@@ -5,6 +5,7 @@ using Distributions
 using DataStructures
 using Random
 using LinearAlgebra
+import StatsBase: percentile
 
 using CalibrateEmulateSample.EnsembleKalmanProcesses
 using CalibrateEmulateSample.Emulators
@@ -29,7 +30,7 @@ function GFunction(x::AM, a::AV) where {AM <: AbstractMatrix, AV <: AbstractVect
 end
 
 function GFunction(x::AM) where {AM <: AbstractMatrix}
-    a = [(i - 2.0) / 2.0 for i in 1:size(x, 1)]
+    a = [(i - 1.0) / 2.0 for i in 1:size(x, 1)]
     return GFunction(x, a)
 end
 
@@ -37,10 +38,10 @@ function main()
 
     rng = MersenneTwister(seed)
 
-    n_repeats = 5 # repeat exp with same data.
-    n_dimensions = 20
+    n_repeats = 30 # repeat exp with same data.
+    n_dimensions = 10
     # To create the sampling
-    n_data_gen = 500 
+    n_data_gen = 800 
 
     data =
         SobolData(params = OrderedDict([Pair(Symbol("x", i), Uniform(0, 1)) for i in 1:n_dimensions]), N = n_data_gen)
@@ -66,7 +67,7 @@ function main()
     save(joinpath(output_directory, "GFunction_slices_truth_$(n_dimensions).png"), f1, px_per_unit = 3)
     save(joinpath(output_directory, "GFunction_slices_truth_$(n_dimensions).pdf"), f1, px_per_unit = 3)
 
-    n_train_pts = 2000
+    n_train_pts = n_dimensions * 250 
     ind = shuffle!(rng, Vector(1:n_data))[1:n_train_pts]
     # now subsample the samples data
     n_tp = length(ind)
@@ -88,11 +89,11 @@ function main()
     overrides = Dict(
         "verbose" => true,
         "scheduler" => DataMisfitController(terminate_at = 1e4),
-        "n_features_opt" => 100,
+        "n_features_opt" => 150,
         "train_fraction" => 0.9,
-        "n_iteration" => 24, # (=multiple of recompute_cov_at - 1 is most efficient)
+        "n_iteration" => 14, # (=multiple of recompute_cov_at - 1 is most efficient)
         "cov_sample_multiplier" => 10.0,
-        "localization" => SECNice(100), # there is no localization for scalar RF
+        "localization" => SECNice(100), 
         "n_ensemble" => 400, #40*n_dimensions,
         "recompute_cov_at" => 5, #every 5 iterations recompute alg. covariance
     )
@@ -143,12 +144,13 @@ function main()
         
         push!(y_preds, y_pred)
         push!(result_preds, result_pred)
+        GC.gc() #collect garbage
 
     end
 
     # analytic sobol indices taken from
     # https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8989694/pdf/main.pdf
-    a = [(i - 2.0) / 2.0 for i in 1:n_dimensions]  # a_i < a_j => a_i more sensitive
+    a = [(i - 1.0) / 2.0 for i in 1:n_dimensions]  # a_i < a_j => a_i more sensitive
     prod_tmp = prod(1 .+ 1 ./ (3 .* (1 .+ a) .^ 2)) - 1
     V = [(1 / (3 * (1 + ai)^2)) / prod_tmp for ai in a]
     prod_tmp2 = [prod(1 .+ 1 ./ (3 .* (1 .+ a[1:end .!== j]) .^ 2)) for j in 1:n_dimensions]
@@ -169,25 +171,47 @@ function main()
     println("Sampled Emulated Sobol Indices (# obs $n_train_pts, noise var $Γ)")
     println("***************************************************************")
 
+
+
     if n_repeats == 1
         println("    firstorder: ", result_preds[1][:firstorder])
         println("    totalorder: ", result_preds[1][:totalorder])
     else
-        firstorder_mean = mean([rp[:firstorder] for rp in result_preds])
-        firstorder_std = std([rp[:firstorder] for rp in result_preds])
-        totalorder_mean = mean([rp[:totalorder] for rp in result_preds])
-        totalorder_std = std([rp[:totalorder] for rp in result_preds])
+        # get percentiles:
+        fo_mat = zeros(n_dimensions,n_repeats)
+        to_mat = zeros(n_dimensions,n_repeats)
 
-        println("(mean) firstorder: ", firstorder_mean)
-        println("(std)  firstorder: ", firstorder_std)
-        println("(mean) totalorder: ", totalorder_mean)
-        println("(std)  totalorder: ", totalorder_std)
+        for (idx,rp) in enumerate(result_preds)
+            fo_mat[:,idx] = rp[:firstorder]
+            to_mat[:,idx] = rp[:totalorder]   
+        end
+        
+        firstorder_med = percentile.(eachrow(fo_mat),50)
+        firstorder_low = percentile.(eachrow(fo_mat),5)
+        firstorder_up = percentile.(eachrow(fo_mat),95)
 
+        totalorder_med = percentile.(eachrow(to_mat),50)
+        totalorder_low = percentile.(eachrow(to_mat),5)
+        totalorder_up = percentile.(eachrow(to_mat),95)
+               
+#        firstorder_mean = mean([rp[:firstorder] for rp in result_preds])
+#        firstorder_std = std([rp[:firstorder] for rp in result_preds])
+#        totalorder_mean = mean([rp[:totalorder] for rp in result_preds])
+#        totalorder_std = std([rp[:totalorder] for rp in result_preds])
+
+        println("(50%) firstorder: ", firstorder_med)
+        println("(5%)  firstorder: ", firstorder_low)
+        println("(95%)  firstorder: ", firstorder_up)
+
+        println("(50%) totalorder: ", totalorder_med)
+        println("(5%)  totalorder: ", totalorder_low)
+        println("(95%)  totalorder: ", totalorder_up)
         #
         f3, ax3, plt3 = errorbars(
             1:n_dimensions,
-            firstorder_mean,
-            2 * firstorder_std;
+            firstorder_med,
+            firstorder_med - firstorder_low,
+            firstorder_up - firstorder_med;
             whiskerwidth = 10,
             color = :red,
             label = "V-emulate",
@@ -198,8 +222,9 @@ function main()
         errorbars!(
             ax3,
             1:n_dimensions,
-            totalorder_mean,
-            2 * totalorder_std;
+            totalorder_med,
+            totalorder_med - totalorder_low,
+            totalorder_up - totalorder_med;
             whiskerwidth = 10,
             color = :blue,
             label = "TV-emulate",
