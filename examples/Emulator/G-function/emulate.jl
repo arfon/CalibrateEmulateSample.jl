@@ -39,7 +39,7 @@ function main()
     rng = MersenneTwister(seed)
 
     n_repeats = 30 # repeat exp with same data.
-    n_dimensions = 10
+    n_dimensions = 6
     # To create the sampling
     n_data_gen = 800 
 
@@ -91,7 +91,7 @@ function main()
         "scheduler" => DataMisfitController(terminate_at = 1e4),
         "n_features_opt" => 150,
         "train_fraction" => 0.9,
-        "n_iteration" => 14, # (=multiple of recompute_cov_at - 1 is most efficient)
+        "n_iteration" => 19, # (=multiple of recompute_cov_at - 1 is most efficient)
         "cov_sample_multiplier" => 10.0,
         "localization" => SECNice(100), 
         "n_ensemble" => 400, #40*n_dimensions,
@@ -176,6 +176,33 @@ function main()
     if n_repeats == 1
         println("    firstorder: ", result_preds[1][:firstorder])
         println("    totalorder: ", result_preds[1][:totalorder])
+
+        f3, ax3, plt3 = scatter(
+            1:n_dimensions,
+            result_preds[1][:firstorder];         
+            color = :red,
+            markersize =8,
+            marker = :cross,
+            label = "V-emulate",
+            title = "input dimension: $(n_dimensions)",
+        )
+        scatter!(ax3, result[:firstorder], color = :red, markersize = 8, label="V-approx")
+        scatter!(ax3, V, color = :red, markersize = 12, marker = :xcross, label="V-true")
+        scatter!(
+            ax3,
+            1:n_dimensions,
+            result_preds[1][:totalorder];
+            color = :blue,
+            label = "TV-emulate",
+            markersize =8,
+            marker = :cross,
+        )
+        scatter!(ax3, result[:totalorder], color = :blue, markersize = 8,label="TV-approx") 
+        scatter!(ax3, TV, color = :blue, markersize = 12, marker = :xcross,  label="TV-true")
+        axislegend(ax3)
+
+        save(joinpath(output_directory, "GFunction_sens_$(case)_$(n_dimensions).png"), f3, px_per_unit = 3)
+        save(joinpath(output_directory, "GFunction_sens_$(case)_$(n_dimensions).pdf"), f3, px_per_unit = 3)
     else
         # get percentiles:
         fo_mat = zeros(n_dimensions,n_repeats)
